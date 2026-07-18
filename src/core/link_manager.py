@@ -182,6 +182,17 @@ class LinkManager:
         (themes put classes like 'nav-open' or 'sticky-header' on outer
         wrappers and on <body>, which used to mislabel every link on the page).
         """
+        # Prose test first: a link embedded in a real sentence is a content
+        # link no matter what wrapper classes the theme uses (heroes with
+        # 'page-header' classes, footer about-blurbs, etc.). Menus never wrap
+        # links in 40+ chars of surrounding paragraph text.
+        prose_parent = link_element.find_parent(('p', 'blockquote', 'td'))
+        if prose_parent:
+            context_text = prose_parent.get_text(' ', strip=True)
+            anchor_text = link_element.get_text(' ', strip=True)
+            if len(context_text) - len(anchor_text) >= 40:
+                return 'body'
+
         current = link_element.parent
 
         while current and current.name:
