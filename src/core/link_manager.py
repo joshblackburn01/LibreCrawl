@@ -174,42 +174,46 @@ class LinkManager:
                 continue
 
     def _detect_link_placement(self, link_element):
-        """Detect where on the page a link is placed"""
-        # Check parent elements up the tree
+        """Detect where on the page a link is placed.
+
+        Nearest-ancestor-wins: walk up from the link and classify by the FIRST
+        meaningful container found. A link inside an article/content block is a
+        body link even if a distant page wrapper carries nav-ish classes
+        (themes put classes like 'nav-open' or 'sticky-header' on outer
+        wrappers and on <body>, which used to mislabel every link on the page).
+        """
         current = link_element.parent
 
         while current and current.name:
-            # Never classify from <body>/<html>: WordPress themes put classes
-            # like 'sticky-header' or 'mobile-menu' on <body>, which mislabeled
-            # EVERY link on the page as navigation (fdazar bug: only wp-login
-            # pages, which lack theme body classes, produced 'body' links).
-            if current.name in ('body', 'html'):
+            name = current.name
+            if name in ('body', 'html'):
                 break
 
-            # Check for footer
-            if current.name == 'footer':
-                return 'footer'
-
-            # Check for footer by class/id
             classes = current.get('class', [])
-            element_id = current.get('id', '')
             classes_str = ' '.join(classes).lower() if classes else ''
+            element_id = (current.get('id') or '').lower()
+            role = (current.get('role') or '').lower()
 
-            if 'footer' in classes_str or 'footer' in element_id.lower():
+            if name == 'footer' or role == 'contentinfo'                     or 'footer' in classes_str or 'footer' in element_id:
                 return 'footer'
 
-            # Check for navigation
-            if current.name in ['nav', 'header']:
+            if name in ('nav', 'header', 'aside') or role in ('navigation', 'banner'):
                 return 'navigation'
 
-            # Check for navigation by class/id
-            if any(keyword in classes_str or keyword in element_id.lower()
-                   for keyword in ['nav', 'menu', 'header']):
+            if name in ('main', 'article') or role == 'main':
+                return 'body'
+
+            content_markers = ('content', 'entry', 'article', 'post-body',
+                               'text-editor', 'et_pb_text', 'prose', 'copy')
+            if any(m in classes_str or m in element_id for m in content_markers):
+                return 'body'
+
+            nav_markers = ('nav', 'menu', 'header', 'breadcrumb', 'sidebar', 'widget')
+            if any(m in classes_str or m in element_id for m in nav_markers):
                 return 'navigation'
 
             current = current.parent
 
-        # Default to body if not in nav or footer
         return 'body'
 
     def is_internal(self, url):
