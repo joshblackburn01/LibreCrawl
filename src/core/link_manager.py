@@ -14,6 +14,7 @@ class LinkManager:
         self.all_discovered_urls = set()
         self.all_links = []
         self.links_set = set()
+        self.links_index = {}  # link_key -> index in all_links (for body-wins dedupe)
         self.source_pages = {}  # Maps target_url -> list of source_urls
 
         self.urls_lock = threading.Lock()
@@ -112,13 +113,22 @@ class LinkManager:
                     if source_url not in self.source_pages[clean_url]:
                         self.source_pages[clean_url].append(source_url)
 
-                # Thread-safe adding to links collection with duplicate checking
+                # Thread-safe adding with body-wins duplicate checking.
+                # Menus appear FIRST in the HTML, so first-wins dedupe used to
+                # keep the 'navigation' copy of a link and silently drop the
+                # 'body' copy of the SAME source->target pair. Body must win:
+                # contextual links are the whole point of the export.
                 with self.links_lock:
                     link_key = f"{link_data['source_url']}|{link_data['target_url']}"
 
                     if link_key not in self.links_set:
                         self.links_set.add(link_key)
+                        self.links_index[link_key] = len(self.all_links)
                         self.all_links.append(link_data)
+                    elif link_data['placement'] == 'body':
+                        idx = self.links_index.get(link_key)
+                        if idx is not None and self.all_links[idx]['placement'] != 'body':
+                            self.all_links[idx] = link_data
 
             except Exception:
                 continue
@@ -168,6 +178,7 @@ class LinkManager:
                     link_key = f"{link_data['source_url']}|{link_data['target_url']}"
                     if link_key not in self.links_set:
                         self.links_set.add(link_key)
+                        self.links_index[link_key] = len(self.all_links)
                         self.all_links.append(link_data)
 
             except Exception:
@@ -289,3 +300,4 @@ class LinkManager:
         with self.links_lock:
             self.all_links.clear()
             self.links_set.clear()
+            self.links_index.clear()
