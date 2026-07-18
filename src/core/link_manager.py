@@ -179,6 +179,13 @@ class LinkManager:
         current = link_element.parent
 
         while current and current.name:
+            # Never classify from <body>/<html>: WordPress themes put classes
+            # like 'sticky-header' or 'mobile-menu' on <body>, which mislabeled
+            # EVERY link on the page as navigation (fdazar bug: only wp-login
+            # pages, which lack theme body classes, produced 'body' links).
+            if current.name in ('body', 'html'):
+                break
+
             # Check for footer
             if current.name == 'footer':
                 return 'footer'
